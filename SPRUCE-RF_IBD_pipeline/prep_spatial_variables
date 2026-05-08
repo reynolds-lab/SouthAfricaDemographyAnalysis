@@ -1,0 +1,121 @@
+############################################################
+# SPRUCE-RF / MAPS
+# Environmental raster clipping + extraction pipeline
+############################################################
+
+module load gdal/2.4.4
+
+############################################################
+# STEP 1: Define bounding box (South Africa region)
+############################################################
+
+WEST=16.0
+NORTH=-24.0
+EAST=26.0
+SOUTH=-35.0
+
+############################################################
+# STEP 2: Define directories
+############################################################
+
+ENV_RAW=/share/hennlab/projects/SPRUCE_sa/EnvironmentalData/rasters
+ENV_CLIP=/share/hennlab/projects/SPRUCE_sa/EnvironmentalData/twentysix_clips
+WD=/share/hennlab/projects/SPRUCE_sa/EnvironmentalData/ExtractedValues-6_Inf-26degrees
+
+mkdir -p $ENV_CLIP
+mkdir -p $WD
+
+############################################################
+# STEP 3: Clip environmental rasters
+############################################################
+
+# Terrain
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/altitude_1KMmedian_MERIT.tif \
+  $ENV_CLIP/altitude.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/slope_1KMmedian_MERIT.tif \
+  $ENV_CLIP/slope.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+# Climate
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/AI_annual.tif \
+  $ENV_CLIP/aridity.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/bio1_mean.tif \
+  $ENV_CLIP/mean_temp.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/bio5_mean.tif \
+  $ENV_CLIP/mean_max_temp.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/bio6_mean.tif \
+  $ENV_CLIP/mean_min_temp.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/bio12_mean.tif \
+  $ENV_CLIP/mean_prec.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/bio13_mean.tif \
+  $ENV_CLIP/prec_wet.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/bio14_mean.tif \
+  $ENV_CLIP/prec_dry.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH $EAST $SOUTH \
+  $ENV_RAW/GPP_mean.tif \
+  $ENV_CLIP/GPP_mean.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+# Hydrology (extended bbox where needed)
+nice gdal_translate -projwin $WEST $NORTH 35.0 $SOUTH \
+  $ENV_RAW/za_lakes.tif \
+  $ENV_CLIP/za_lakes.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+nice gdal_translate -projwin $WEST $NORTH 35.0 $SOUTH \
+  $ENV_RAW/za_rivers.tif \
+  $ENV_CLIP/za_rivers.tif \
+  -co COMPRESS=DEFLATE -co ZLEVEL=9
+
+############################################################
+# STEP 4: Extract values at MAPS deme coordinates
+############################################################
+
+module load gdal/2.4.4
+
+cp /share/hennlab/projects/SPRUCE_sa/MAPS/runs/with_namibia_300-6_Inf-output/demes.txt $WD
+
+awk '{print $2,$1}' $WD/demes.txt > $WD/demes_xy.txt
+
+############################################################
+# Extract raster values
+############################################################
+
+for VAR in altitude slope aridity mean_temp mean_min_temp mean_max_temp mean_prec prec_wet prec_dry GPP_mean za_lakes za_rivers
+do
+  cat $WD/demes_xy.txt | gdallocationinfo -valonly -wgs84 $ENV_CLIP/${VAR}.tif > $WD/${VAR}.txt
+done
+
+############################################################
+# STEP 5: Clean missing values
+############################################################
+
+for FILE in $WD/*.txt
+do
+  sed 's/-999.*/NA/g' $FILE | sed 's/^[[:blank:]]*$/NA/' > ${FILE%.txt}_clean.txt
+done
