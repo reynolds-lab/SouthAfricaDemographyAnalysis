@@ -38,3 +38,13 @@ for(i in selected){
 
 write.table(ibd_summary, "2_6.sims", quote=FALSE, sep=" ", col=FALSE, row=FALSE)
 write.table(locs, "2_6.coord", quote=FALSE, sep=" ", col=FALSE, row=FALSE)
+
+############################################################
+# run MAPS
+############################################################
+
+#!/bin/bash
+
+cd /share/hennlab/projects/SPRUCE_sa/MAPS/runs
+
+../src/runeems2 --params dec2024_2-6.ini
